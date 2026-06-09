@@ -74,7 +74,7 @@ Flags (combinable):
 |---|---|---|
 | `--yes` | Skip all approval prompts (auto-approve everything, including shell) | `node cammy.mjs run --yes "run the linter and fix issues"` |
 | `--max=N` | Override max iterations for this run | `node cammy.mjs run --max=10 "small fix"` |
-| `--model=` | Override the model for this run | `node cammy.mjs run --model=claude-sonnet-4-20250514 "..."` |
+| `--model=` | Override the model for this run | `node cammy.mjs run --model=claude-sonnet-4-6 "..."` |
 | `--provider=` | Override the provider for this run | `node cammy.mjs run --provider=ollama --model=gemma3 "..."` |
 | `--task=` | Run a named task from cammy.json instead of an inline goal | `node cammy.mjs run --task=fix-tests` |
 
