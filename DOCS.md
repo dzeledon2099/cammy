@@ -29,7 +29,7 @@ From zero to a successful run in under 5 minutes. You need Node 18 or newer
 
 ```bash
 # 1. Get cammy.mjs into your project (clone or copy the single file)
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/cammy/main/cammy.mjs
+curl -O https://raw.githubusercontent.com/dzeledon2099/cammy/main/cammy.mjs
 
 # 2. Set a key for your provider (pick ONE)
 export ANTHROPIC_API_KEY=sk-ant-...     # Anthropic (default provider)
