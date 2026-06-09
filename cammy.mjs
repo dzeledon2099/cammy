@@ -20,7 +20,7 @@ import crypto from "node:crypto";
 import readline from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 const CWD = process.cwd();
 const CAMMY_DIR = path.join(CWD, ".cammy");
 const SESS_DIR = path.join(CAMMY_DIR, "sessions");
@@ -28,7 +28,7 @@ const SESS_DIR = path.join(CAMMY_DIR, "sessions");
 /* ───────────────────────── config ───────────────────────── */
 
 const DEFAULT_CONFIG = {
-  provider: "anthropic",                  // anthropic | openai | ollama
+  provider: "anthropic",                  // anthropic | openai | ollama | google
   model: "claude-sonnet-4-20250514",
   baseUrl: null,                          // override for proxies / ollama
   maxIterations: 30,
@@ -140,8 +140,10 @@ function execTool(call) {
 }
 
 /* ─────────────── provider adapters ───────────────
-   One neutral interface; Anthropic native + an
-   OpenAI-compatible adapter that also covers Ollama. */
+   One neutral interface; Anthropic native, an
+   OpenAI-compatible adapter that also covers Ollama,
+   and a native Google adapter for Gemma 4 / Gemini
+   via the generateContent API.                      */
 
 const anthropicAdapter = {
   userMessage: (text) => ({ role: "user", content: text }),
@@ -207,13 +209,65 @@ const openaiAdapter = {
     results.map((r) => ({ role: "tool", tool_call_id: r.id, content: r.output })),
 };
 
+const googleAdapter = {
+  userMessage: (text) => ({ role: "user", parts: [{ text }] }),
+  async call(cfg, system, messages) {
+    const base = cfg.baseUrl ?? "https://generativelanguage.googleapis.com";
+    const key = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY ?? "";
+    const res = await fetch(`${base}/v1beta/models/${cfg.model}:generateContent`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: messages,
+        tools: [{
+          functionDeclarations: TOOL_DEFS.map((t) => ({
+            name: t.name, description: t.description, parameters: t.input_schema,
+          })),
+        }],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(`Google ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    return {
+      text: parts.filter((p) => p.text).map((p) => p.text).join("\n"),
+      toolCalls: parts.filter((p) => p.functionCall).map((p) => ({
+        id: p.functionCall.id ?? crypto.randomUUID(),
+        name: p.functionCall.name,
+        input: p.functionCall.args ?? {},
+      })),
+      usage: {
+        input: data.usageMetadata?.promptTokenCount ?? 0,
+        output: data.usageMetadata?.candidatesTokenCount ?? 0,
+      },
+      assistantMessage: { role: "model", parts: parts.length ? parts : [{ text: "" }] },
+    };
+  },
+  toolResultMessages: (results) => [{
+    role: "user",
+    parts: results.map((r) => ({
+      functionResponse: {
+        name: r.name,
+        response: r.isError ? { error: r.output } : { output: r.output },
+      },
+    })),
+  }],
+};
+
+function pickAdapter(provider) {
+  if (provider === "anthropic") return anthropicAdapter;
+  if (provider === "google") return googleAdapter;
+  return openaiAdapter; // openai + ollama + any OpenAI-compatible endpoint
+}
+
 /* ───────────────────── the loop harness ───────────────────── */
 
 const estCost = (u, cfg) =>
   (u.input * cfg.pricing.inputPerMTok + u.output * cfg.pricing.outputPerMTok) / 1e6;
 
 async function runLoop({ goal, cfg, emit, approve, resume }) {
-  const adapter = cfg.provider === "anthropic" ? anthropicAdapter : openaiAdapter;
+  const adapter = pickAdapter(cfg.provider);
   const sessionId = resume?.sessionId ?? new Date().toISOString().replace(/[:.]/g, "-")
     + "-" + crypto.randomBytes(3).toString("hex");
   fs.mkdirSync(SESS_DIR, { recursive: true });
@@ -283,7 +337,7 @@ async function runLoop({ goal, cfg, emit, approve, resume }) {
       }
 
       log({ type: "tool_result", iteration: iter, name: call.name, isError, output: output.slice(0, 2000) });
-      results.push({ id: call.id, output, isError });
+      results.push({ id: call.id, name: call.name, output, isError });
     }
     messages.push(...adapter.toolResultMessages(results));
     log({ type: "checkpoint", iteration: iter, messages, usage }); // resume point
@@ -392,7 +446,7 @@ if (cmd === "init") {
   const gi = path.join(CWD, ".gitignore");
   if (!fs.existsSync(gi) || !fs.readFileSync(gi, "utf8").includes(".cammy"))
     fs.appendFileSync(gi, "\n.cammy/\n");
-  console.log("✓ created cammy.json and .cammy/ — set ANTHROPIC_API_KEY (or OPENAI_API_KEY) and run:\n  cammy run \"your goal\"");
+  console.log("✓ created cammy.json and .cammy/ — set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY and run:\n  cammy run \"your goal\"");
 } else if (cmd === "run") {
   const cfg = loadConfig(flags);
   if (flags.yes) cfg.approval = {};
@@ -423,5 +477,7 @@ if (cmd === "init") {
   cammy run "<goal>"          run the loop (flags: --yes --max=N --model= --provider= --task=)
   cammy resume <session-id>   continue from last checkpoint
   cammy sessions              list session journals
-  cammy serve                 start the dashboard backend on :7433`);
+  cammy serve                 start the dashboard backend on :7433
+
+  providers: anthropic · openai · ollama · google (Gemma 4 / Gemini)`);
 }
