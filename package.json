@@ -1,0 +1,10 @@
+{
+  "name": "cammy",
+  "version": "0.1.0",
+  "description": "Open-source agentic loop harness — goal in, working code out. No prompting required.",
+  "type": "module",
+  "bin": { "cammy": "./cammy.mjs" },
+  "engines": { "node": ">=18" },
+  "keywords": ["agent", "llm", "harness", "cli", "autonomous"],
+  "license": "MIT"
+}
