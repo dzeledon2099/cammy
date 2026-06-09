@@ -29,7 +29,7 @@ const SESS_DIR = path.join(CAMMY_DIR, "sessions");
 
 const DEFAULT_CONFIG = {
   provider: "anthropic",                  // anthropic | openai | ollama | google
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-6",
   baseUrl: null,                          // override for proxies / ollama
   maxIterations: 30,
   budgetUSD: 2.0,
