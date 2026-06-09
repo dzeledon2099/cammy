@@ -6,6 +6,8 @@ MIT licensed · Node 18+ · zero dependencies · single file
 
 Cammy wraps the entire plan → act → observe agent loop so you don't have to: it synthesizes the system prompt, executes tools, retries failed model calls, detects stuck loops, enforces budget / iteration / wall-clock guardrails, gates dangerous actions behind human approval, and journals every event to resumable JSONL sessions.
 
+📖 **Full documentation:** [DOCS.md](./DOCS.md)
+
 ## Install
 
 ```bash
